@@ -13,13 +13,15 @@ fn generate_add_func(module: &mut Module) {
         Some(Type::Word),
     );
 
-    func.add_block("start");
+    func.add_block(
+        "start",
+        Some(Instr::Ret(Some(Value::Temporary("c".into()))))
+    );
     func.assign_instr(
         Value::Temporary("c".into()),
         Type::Word,
         Instr::Add(Value::Temporary("a".into()), Value::Temporary("b".into())),
     );
-    func.add_instr(Instr::Ret(Some(Value::Temporary("c".into()))));
 
     module.add_function(func);
 }
@@ -27,7 +29,10 @@ fn generate_add_func(module: &mut Module) {
 fn generate_main_func(module: &mut Module) {
     let mut func = Function::new(Linkage::public(), "main", Vec::new(), Some(Type::Word));
 
-    func.add_block("start");
+    func.add_block(
+        "start",
+        Some(Instr::Ret(Some(Value::Const(0))))
+    );
     func.assign_instr(
         Value::Temporary("r".into()),
         Type::Word,
@@ -45,7 +50,6 @@ fn generate_main_func(module: &mut Module) {
         ],
         Some(1),
     ));
-    func.add_instr(Instr::Ret(Some(Value::Const(0))));
 
     module.add_function(func);
 }

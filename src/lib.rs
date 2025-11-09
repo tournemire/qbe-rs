@@ -303,6 +303,15 @@ pub enum Instr<'a> {
     Hlt,
 }
 
+impl Instr<'_> {
+    fn is_jump(&self) -> bool {
+        matches!(
+            self,
+            Self::Jnz(_, _, _) | Self::Jmp(_) | Self::Ret(_) | Self::Hlt
+        )
+    }
+}
+
 impl fmt::Display for Instr<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -768,6 +777,9 @@ pub struct Block<'a> {
 
     /// A list of statements in the block
     pub items: Vec<Statement<'a>>,
+    /// Final jump of the block
+    /// if absent, QBE will generate a jump to the next block
+    pub jump: Option<Instr<'a>>,
 }
 
 impl<'a> Block<'a> {
@@ -899,10 +911,18 @@ impl<'a> Function<'a> {
     }
 
     /// Adds a new empty block with a specified label and returns a reference to it
-    pub fn add_block(&mut self, label: impl Into<String>) -> &mut Block<'a> {
+    pub fn add_block(
+        &mut self,
+        label: impl Into<String>,
+        closing: Option<Instr<'a>>,
+    ) -> &mut Block<'a> {
+        if let Some(instr) = &closing {
+            assert!(instr.is_jump());
+        }
         self.blocks.push(Block {
             label: label.into(),
             items: Vec::new(),
+            jump: closing,
         });
         self.blocks.last_mut().unwrap()
     }
