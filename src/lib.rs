@@ -181,7 +181,7 @@ pub enum Cmp {
 /// let ret = Instr::Ret(Some(Value::Temporary("result".to_string())));
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum Instr<'a> {
+pub enum Instr {
     /// Adds values of two temporaries together
     Add(Value, Value),
     /// Subtracts the second value from the first one
@@ -193,7 +193,7 @@ pub enum Instr<'a> {
     /// Returns a remainder from division
     Rem(Value, Value),
     /// Performs a comparion between values
-    Cmp(Type<'a>, Cmp, Value, Value),
+    Cmp(Type, Cmp, Value, Value),
     /// Performs a bitwise AND on values
     And(Value, Value),
     /// Performs a bitwise OR on values
@@ -211,7 +211,7 @@ pub enum Instr<'a> {
     /// Unconditionally jumps to a label
     Jmp(String),
     /// Calls a function
-    Call(String, Vec<(Type<'a>, Value)>, Option<u64>),
+    Call(String, Vec<(Type, Value)>, Option<u64>),
     /// Allocates a 4-byte aligned area on the stack
     Alloc4(u32),
     /// Allocates a 8-byte aligned area on the stack
@@ -220,10 +220,10 @@ pub enum Instr<'a> {
     Alloc16(u128),
     /// Stores a value into memory pointed to by destination.
     /// `(type, destination, value)`
-    Store(Type<'a>, Value, Value),
+    Store(Type, Value, Value),
     /// Loads a value from memory pointed to by source
     /// `(type, source)`
-    Load(Type<'a>, Value),
+    Load(Type, Value),
     /// `(source, destination, n)`
     ///
     /// Copy `n` bytes from the source address to the destination address.
@@ -292,7 +292,7 @@ pub enum Instr<'a> {
     /// Initializes a variable argument list
     Vastart(Value),
     /// Fetches the next argument from a variable argument list
-    Vaarg(Type<'a>, Value),
+    Vaarg(Type, Value),
 
     // Phi instruction
     /// Selects value based on the control flow path into a block.
@@ -303,7 +303,7 @@ pub enum Instr<'a> {
     Hlt,
 }
 
-impl Instr<'_> {
+impl Instr {
     fn is_jump(&self) -> bool {
         matches!(
             self,
@@ -312,7 +312,7 @@ impl Instr<'_> {
     }
 }
 
-impl fmt::Display for Instr<'_> {
+impl fmt::Display for Instr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Add(lhs, rhs) => write!(f, "add {lhs}, {rhs}"),
@@ -465,7 +465,7 @@ impl fmt::Display for Instr<'_> {
 /// assert_eq!(abi, Type::Word);
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum Type<'a> {
+pub enum Type {
     // Base types
     Word,
     Long,
@@ -484,10 +484,10 @@ pub enum Type<'a> {
     UnsignedHalfword,
 
     /// Aggregate type with a specified name
-    Aggregate(&'a TypeDef<'a>),
+    Aggregate(String),
 }
 
-impl Type<'_> {
+impl Type {
     /// Returns a C ABI type. Extended types are converted to closest base
     /// types
     pub fn into_abi(self) -> Self {
@@ -523,22 +523,23 @@ impl Type<'_> {
             Self::Halfword | Self::SignedHalfword | Self::UnsignedHalfword => 2,
             Self::Word | Self::Single => 4,
             Self::Long | Self::Double => 8,
-            Self::Aggregate(td) => {
-                let mut offset = 0;
+            Self::Aggregate(_) => {
+                todo!();
+                // let mut offset = 0;
 
                 // calculation taken from: https://en.wikipedia.org/wiki/Data_structure_alignment#Computing%20padding
-                for (item, repeat) in td.items.iter() {
-                    let align = item.align();
-                    let size = *repeat as u64 * item.size();
-                    let padding = (align - (offset % align)) % align;
-                    offset += padding + size;
-                }
+                // for (item, repeat) in td.items.iter() {
+                //     let align = item.align();
+                //     let size = *repeat as u64 * item.size();
+                //     let padding = (align - (offset % align)) % align;
+                //     offset += padding + size;
+                // }
 
-                let align = self.align();
-                let padding = (align - (offset % align)) % align;
+                // let align = self.align();
+                // let padding = (align - (offset % align)) % align;
 
                 // size is the final offset with the padding that is left
-                offset + padding
+                // offset + padding
             }
         }
     }
@@ -546,18 +547,19 @@ impl Type<'_> {
     /// Returns byte alignment for values of the type
     pub fn align(&self) -> u64 {
         match self {
-            Self::Aggregate(td) => {
-                if let Some(align) = td.align {
-                    return align;
-                }
+            Self::Aggregate(_td) => {
+                todo!("align for aggregate")
+                // if let Some(align) = td.align {
+                //     return align;
+                // }
 
                 // the alignment of a type is the maximum alignment of its members
                 // when there's no members, the alignment is usuallly defined to be 1.
-                td.items
-                    .iter()
-                    .map(|item| item.0.align())
-                    .max()
-                    .unwrap_or(1)
+                // td.items
+                //     .iter()
+                //     .map(|item| item.0.align())
+                //     .max()
+                //     .unwrap_or(1)
             }
 
             _ => self.size(),
@@ -565,7 +567,7 @@ impl Type<'_> {
     }
 }
 
-impl fmt::Display for Type<'_> {
+impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Byte => write!(f, "b"),
@@ -579,7 +581,7 @@ impl fmt::Display for Type<'_> {
             Self::Single => write!(f, "s"),
             Self::Double => write!(f, "d"),
             Self::Zero => write!(f, "z"),
-            Self::Aggregate(td) => write!(f, ":{}", td.name),
+            Self::Aggregate(name) => write!(f, ":{}", name),
         }
     }
 }
@@ -607,19 +609,19 @@ impl fmt::Display for Value {
 
 /// QBE data definition
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
-pub struct DataDef<'a> {
+pub struct DataDef {
     pub linkage: Linkage,
     pub name: String,
     pub align: Option<u64>,
-    pub items: Vec<(Type<'a>, DataItem)>,
+    pub items: Vec<(Type, DataItem)>,
 }
 
-impl<'a> DataDef<'a> {
+impl DataDef {
     pub fn new(
         linkage: Linkage,
         name: impl Into<String>,
         align: Option<u64>,
-        items: Vec<(Type<'a>, DataItem)>,
+        items: Vec<(Type, DataItem)>,
     ) -> Self {
         Self {
             linkage,
@@ -630,7 +632,7 @@ impl<'a> DataDef<'a> {
     }
 }
 
-impl fmt::Display for DataDef<'_> {
+impl fmt::Display for DataDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}data ${} = ", self.linkage, self.name)?;
 
@@ -678,14 +680,14 @@ impl fmt::Display for DataItem {
 
 /// QBE aggregate type definition
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
-pub struct TypeDef<'a> {
+pub struct TypeDef {
     pub name: String,
     pub align: Option<u64>,
     // TODO: Opaque types?
-    pub items: Vec<(Type<'a>, usize)>,
+    pub items: Vec<(Type, usize)>,
 }
 
-impl fmt::Display for TypeDef<'_> {
+impl fmt::Display for TypeDef {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "type :{} = ", self.name)?;
         if let Some(align) = self.align {
@@ -710,12 +712,12 @@ impl fmt::Display for TypeDef<'_> {
 
 /// An IR statement
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum Statement<'a> {
-    Assign(Value, Type<'a>, Instr<'a>),
-    Volatile(Instr<'a>),
+pub enum Statement {
+    Assign(Value, Type, Instr),
+    Volatile(Instr),
 }
 
-impl fmt::Display for Statement<'_> {
+impl fmt::Display for Statement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Assign(temp, ty, instr) => {
@@ -772,34 +774,31 @@ impl fmt::Display for Statement<'_> {
 /// assert!(block.jumps());
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
-pub struct Block<'a> {
+pub struct Block {
     /// Label before the block
     pub label: String,
 
     /// A list of statements in the block
-    pub items: Vec<Statement<'a>>,
+    pub items: Vec<Statement>,
     /// Final jump of the block
     /// if absent, QBE will generate a jump to the next block
-    pub jump: Option<Instr<'a>>,
+    pub jump: Option<Instr>,
 }
 
-impl<'a> Block<'a> {
+impl Block {
     /// Adds a new instruction to the block
-    pub fn add_instr(&mut self, instr: Instr<'a>) {
-        self.items
-            .push(Statement::Volatile(instr));
+    pub fn add_instr(&mut self, instr: Instr) {
+        self.items.push(Statement::Volatile(instr));
     }
 
     /// Adds a new instruction assigned to a temporary
-    pub fn assign_instr(&mut self, temp: Value, ty: Type<'a>, instr: Instr<'a>) {
+    pub fn assign_instr(&mut self, temp: Value, ty: Type, instr: Instr) {
         let final_type = match instr {
             Instr::Call(_, _, _) => ty,
             _ => ty.into_base(),
         };
 
-        self.items.push(Statement::Assign(
-            temp, final_type, instr,
-        ));
+        self.items.push(Statement::Assign(temp, final_type, instr));
     }
 
     /// Returns true if the block's last instruction is a jump
@@ -814,7 +813,7 @@ impl<'a> Block<'a> {
     }
 }
 
-impl fmt::Display for Block<'_> {
+impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "@{}", self.label)?;
 
@@ -877,7 +876,7 @@ impl fmt::Display for Block<'_> {
 /// );
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
-pub struct Function<'a> {
+pub struct Function {
     /// Function's linkage
     pub linkage: Linkage,
 
@@ -885,22 +884,22 @@ pub struct Function<'a> {
     pub name: String,
 
     /// Function arguments
-    pub arguments: Vec<(Type<'a>, Value)>,
+    pub arguments: Vec<(Type, Value)>,
 
     /// Return type
-    pub return_ty: Option<Type<'a>>,
+    pub return_ty: Option<Type>,
 
     /// Labelled blocks
-    pub blocks: Vec<Block<'a>>,
+    pub blocks: Vec<Block>,
 }
 
-impl<'a> Function<'a> {
+impl Function {
     /// Instantiates an empty function and returns it
     pub fn new(
         linkage: Linkage,
         name: impl Into<String>,
-        arguments: Vec<(Type<'a>, Value)>,
-        return_ty: Option<Type<'a>>,
+        arguments: Vec<(Type, Value)>,
+        return_ty: Option<Type>,
     ) -> Self {
         Function {
             linkage,
@@ -915,8 +914,8 @@ impl<'a> Function<'a> {
     pub fn add_block(
         &mut self,
         label: impl Into<String>,
-        closing: Option<Instr<'a>>,
-    ) -> &mut Block<'a> {
+        closing: Option<Instr>,
+    ) -> &mut Block {
         if let Some(instr) = &closing {
             assert!(instr.is_jump());
         }
@@ -933,14 +932,14 @@ impl<'a> Function<'a> {
         since = "3.0.0",
         note = "Use `self.blocks.last()` or `self.blocks.last_mut()` instead."
     )]
-    pub fn last_block(&mut self) -> &Block<'a> {
+    pub fn last_block(&mut self) -> &Block {
         self.blocks
             .last()
             .expect("Function must have at least one block")
     }
 
     /// Adds a new instruction to the last block
-    pub fn add_instr(&mut self, instr: Instr<'a>) {
+    pub fn add_instr(&mut self, instr: Instr) {
         self.blocks
             .last_mut()
             .expect("Last block must be present")
@@ -948,7 +947,7 @@ impl<'a> Function<'a> {
     }
 
     /// Adds a new instruction assigned to a temporary
-    pub fn assign_instr(&mut self, temp: Value, ty: Type<'a>, instr: Instr<'a>) {
+    pub fn assign_instr(&mut self, temp: Value, ty: Type, instr: Instr) {
         self.blocks
             .last_mut()
             .expect("Last block must be present")
@@ -956,7 +955,7 @@ impl<'a> Function<'a> {
     }
 }
 
-impl fmt::Display for Function<'_> {
+impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}function", self.linkage)?;
         if let Some(ty) = &self.return_ty {
@@ -1144,15 +1143,15 @@ impl fmt::Display for Linkage {
 /// module.add_function(main);
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
-pub struct Module<'a> {
-    pub functions: Vec<Function<'a>>,
-    pub types: Vec<TypeDef<'a>>,
-    pub data: Vec<DataDef<'a>>,
+pub struct Module {
+    pub functions: Vec<Function>,
+    pub types: Vec<TypeDef>,
+    pub data: Vec<DataDef>,
 }
 
-impl<'a> Module<'a> {
+impl Module {
     /// Creates a new module
-    pub fn new() -> Module<'a> {
+    pub fn new() -> Module {
         Module {
             functions: Vec::new(),
             types: Vec::new(),
@@ -1162,26 +1161,26 @@ impl<'a> Module<'a> {
 
     /// Adds a function to the module, returning a reference to it for later
     /// modification
-    pub fn add_function(&mut self, func: Function<'a>) -> &mut Function<'a> {
+    pub fn add_function(&mut self, func: Function) -> &mut Function {
         self.functions.push(func);
         self.functions.last_mut().unwrap()
     }
 
     /// Adds a type definition to the module, returning a reference to it for
     /// later modification
-    pub fn add_type(&mut self, def: TypeDef<'a>) -> &mut TypeDef<'a> {
+    pub fn add_type(&mut self, def: TypeDef) -> &mut TypeDef {
         self.types.push(def);
         self.types.last_mut().unwrap()
     }
 
     /// Adds a data definition to the module
-    pub fn add_data(&mut self, data: DataDef<'a>) -> &mut DataDef<'a> {
+    pub fn add_data(&mut self, data: DataDef) -> &mut DataDef {
         self.data.push(data);
         self.data.last_mut().unwrap()
     }
 }
 
-impl fmt::Display for Module<'_> {
+impl fmt::Display for Module {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for ty in self.types.iter() {
             writeln!(f, "{ty}")?;
