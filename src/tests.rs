@@ -25,7 +25,8 @@ fn qbe_value() {
 fn block() {
     let blk = Block {
         label: "start".into(),
-        items: vec![BlockItem::Statement(Statement::Volatile(Instr::Ret(None)))],
+        items: vec![],
+        jump: Some(Instr::Ret(None)),
     };
 
     let formatted = format!("{blk}");
@@ -36,22 +37,18 @@ fn block() {
     let blk = Block {
         label: "start".into(),
         items: vec![
-            BlockItem::Comment("Comment".into()),
-            BlockItem::Statement(Statement::Assign(
+            Statement::Assign(
                 Value::Temporary("foo".into()),
                 Type::Word,
                 Instr::Add(Value::Const(2), Value::Const(2)),
-            )),
-            BlockItem::Statement(Statement::Volatile(Instr::Ret(Some(Value::Temporary(
-                "foo".into(),
-            ))))),
+            ),
         ],
+        jump: Some(Instr::Ret(Some(Value::Temporary("foo".into()))))
     };
 
     let formatted = format!("{blk}");
     let mut lines = formatted.lines();
     assert_eq!(lines.next().unwrap(), "@start");
-    assert_eq!(lines.next().unwrap(), "\t# Comment");
     assert_eq!(lines.next().unwrap(), "\t%foo =w add 2, 2");
     assert_eq!(lines.next().unwrap(), "\tret %foo");
 }
@@ -60,11 +57,12 @@ fn block() {
 fn instr_blit() {
     let blk = Block {
         label: "start".into(),
-        items: vec![BlockItem::Statement(Statement::Volatile(Instr::Blit(
+        items: vec![Statement::Volatile(Instr::Blit(
             Value::Temporary("src".into()),
             Value::Temporary("dst".into()),
             4,
-        )))],
+        ))],
+        jump: None
     };
 
     let formatted = format!("{blk}");
@@ -82,7 +80,8 @@ fn function() {
         arguments: Vec::new(),
         blocks: vec![Block {
             label: "start".into(),
-            items: vec![BlockItem::Statement(Statement::Volatile(Instr::Ret(None)))],
+            items: vec![],
+            jump: Some(Instr::Ret(None))
         }],
     };
 
@@ -302,8 +301,7 @@ fn module_fmt_order() {
     let mut func = Function::new(Linkage::public(), "test_func", Vec::new(), None);
 
     // Add a block to the function and an instruction to the block
-    let block = func.add_block("entry");
-    block.add_instr(Instr::Ret(None));
+    let _block = func.add_block("entry", Some(Instr::Ret(None)));
 
     module.add_function(func);
 
@@ -675,6 +673,7 @@ fn complex_block_with_multiple_instructions() {
     let mut block = Block {
         label: "test_block".into(),
         items: Vec::new(),
+        jump: Some(Instr::Hlt),
     };
 
     // Add unsigned division
@@ -710,9 +709,6 @@ fn complex_block_with_multiple_instructions() {
         ),
     );
 
-    // Add a termination
-    block.add_instr(Instr::Hlt);
-
     // Format the block and check the output
     let formatted = format!("{block}");
     let lines: Vec<&str> = formatted.lines().collect();
@@ -730,6 +726,7 @@ fn assign_instr_aggregate_type_coercion() {
     let mut block = Block {
         label: "test_block".into(),
         items: Vec::new(),
+        jump: None,
     };
 
     let typedef = TypeDef {

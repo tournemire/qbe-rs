@@ -35,7 +35,10 @@
 //! );
 //!
 //! // Add a block to the function
-//! let mut block = func.add_block("start");
+//! let mut block = func.add_block(
+//!     "start",
+//!     Some(Instr::Ret(Some(Value::Temporary("sum".to_string()))))
+//! );
 //!
 //! // Add two arguments and store result in "sum"
 //! block.assign_instr(
@@ -46,9 +49,6 @@
 //!         Value::Temporary("b".to_string()),
 //!     ),
 //! );
-//!
-//! // Return the sum
-//! block.add_instr(Instr::Ret(Some(Value::Temporary("sum".to_string()))));
 //!
 //! // Add the function to the module
 //! module.add_function(func);
@@ -742,6 +742,7 @@ impl fmt::Display for Statement<'_> {
 /// let mut block = Block {
 ///     label: "loop".to_string(),
 ///     items: Vec::new(),
+///     jump: None,
 /// };
 ///
 /// // Increment loop counter: %i = %i + 1
@@ -817,15 +818,15 @@ impl fmt::Display for Block<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "@{}", self.label)?;
 
-        write!(
-            f,
-            "{}",
-            self.items
-                .iter()
-                .map(|instr| format!("\t{instr}"))
-                .collect::<Vec<String>>()
-                .join("\n")
-        )
+        for instr in self.items.iter() {
+            writeln!(f, "\t{}", instr)?;
+        }
+        if let Some(jmp) = &self.jump {
+            writeln!(f, "\t{}", jmp)?;
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -848,7 +849,10 @@ impl fmt::Display for Block<'_> {
 /// );
 ///
 /// // Add the start block
-/// let mut start = is_even.add_block("start");
+/// let mut start = is_even.add_block(
+///     "start",
+///     Some(Instr::Ret(Some(Value::Temporary("is_zero".to_string()))))
+/// );
 ///
 /// // Calculate n % 2 (by using n & 1)
 /// start.assign_instr(
@@ -871,9 +875,6 @@ impl fmt::Display for Block<'_> {
 ///         Value::Const(0),
 ///     ),
 /// );
-///
-/// // Return the result
-/// start.add_instr(Instr::Ret(Some(Value::Temporary("is_zero".to_string()))));
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
 pub struct Function<'a> {
@@ -975,7 +976,7 @@ impl fmt::Display for Function<'_> {
         )?;
 
         for blk in self.blocks.iter() {
-            writeln!(f, "{blk}")?;
+            write!(f, "{blk}")?;
         }
 
         write!(f, "}}")
@@ -1123,7 +1124,10 @@ impl fmt::Display for Linkage {
 ///     Some(Type::Word),
 /// );
 ///
-/// let mut start = main.add_block("start");
+/// let mut start = main.add_block(
+///     "start",
+///     Some(Instr::Ret(Some(Value::Const(0))))
+/// );
 ///
 /// // Call printf with the string: %r = call $printf(l $hello)
 /// start.assign_instr(
@@ -1135,9 +1139,6 @@ impl fmt::Display for Linkage {
 ///         None,
 ///     ),
 /// );
-///
-/// // Return 0
-/// start.add_instr(Instr::Ret(Some(Value::Const(0))));
 ///
 /// // Add the function to the module
 /// module.add_function(main);
