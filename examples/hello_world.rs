@@ -18,7 +18,7 @@ fn generate_add_func(module: &mut Module) {
         Some(Instr::Ret(Some(Value::Temporary("c".into()))))
     );
     func.assign_instr(
-        Value::Temporary("c".into()),
+        "c".into(),
         Type::Word,
         Instr::Add(Value::Temporary("a".into()), Value::Temporary("b".into())),
     );
@@ -34,7 +34,7 @@ fn generate_main_func(module: &mut Module) {
         Some(Instr::Ret(Some(Value::Const(0))))
     );
     func.assign_instr(
-        Value::Temporary("r".into()),
+        "r".into(),
         Type::Word,
         Instr::Call(
             "add".into(),
