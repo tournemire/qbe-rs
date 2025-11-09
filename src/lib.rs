@@ -739,16 +739,13 @@ impl fmt::Display for Statement<'_> {
 /// # Examples
 ///
 /// ```rust
-/// use qbe::{Block, BlockItem, Instr, Statement, Type, Value};
+/// use qbe::{Block, Instr, Statement, Type, Value};
 ///
 /// // Create a block for a loop body
 /// let mut block = Block {
 ///     label: "loop".to_string(),
 ///     items: Vec::new(),
 /// };
-///
-/// // Add a helpful comment
-/// block.add_comment("Loop body - increment counter and accumulate sum");
 ///
 /// // Increment loop counter: %i = %i + 1
 /// block.assign_instr(
@@ -782,34 +779,14 @@ pub struct Block<'a> {
     pub label: String,
 
     /// A list of statements in the block
-    pub items: Vec<BlockItem<'a>>,
-}
-
-/// See [`Block::items`];
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum BlockItem<'a> {
-    Statement(Statement<'a>),
-    Comment(String),
-}
-
-impl fmt::Display for BlockItem<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Statement(stmt) => write!(f, "{stmt}"),
-            Self::Comment(comment) => write!(f, "# {comment}"),
-        }
-    }
+    pub items: Vec<Statement<'a>>,
 }
 
 impl<'a> Block<'a> {
-    pub fn add_comment(&mut self, contents: impl Into<String>) {
-        self.items.push(BlockItem::Comment(contents.into()));
-    }
-
     /// Adds a new instruction to the block
     pub fn add_instr(&mut self, instr: Instr<'a>) {
         self.items
-            .push(BlockItem::Statement(Statement::Volatile(instr)));
+            .push(Statement::Volatile(instr));
     }
 
     /// Adds a new instruction assigned to a temporary
@@ -819,16 +796,16 @@ impl<'a> Block<'a> {
             _ => ty.into_base(),
         };
 
-        self.items.push(BlockItem::Statement(Statement::Assign(
+        self.items.push(Statement::Assign(
             temp, final_type, instr,
-        )));
+        ));
     }
 
     /// Returns true if the block's last instruction is a jump
     pub fn jumps(&self) -> bool {
         let last = self.items.last();
 
-        if let Some(BlockItem::Statement(Statement::Volatile(instr))) = last {
+        if let Some(Statement::Volatile(instr)) = last {
             matches!(instr, Instr::Ret(_) | Instr::Jmp(_) | Instr::Jnz(..))
         } else {
             false
